@@ -52,7 +52,7 @@ const Sidebar = ({
 
   const handleAddToTimeline = useCallback((clip) => {
     if (onAddToTimeline) {
-      onAddToTimeline(clip.id, 0, 0); // Add to main track at start
+      onAddToTimeline(clip.id, 0, 0); // Add to main track at current cursor position
     }
   }, [onAddToTimeline]);
 

@@ -245,6 +245,7 @@ const Timeline = ({
     
     const clipId = parseInt(e.dataTransfer.getData('text/plain'));
     if (clipId && !isNaN(clipId) && onDragFromSidebar) {
+      // Use the drop position as the start time
       onDragFromSidebar(clipId, trackId, time);
     }
   }, [pixelsPerSecond, onDragFromSidebar]);

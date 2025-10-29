@@ -251,15 +251,12 @@ function App() {
         duration = 10; // Default fallback
       }
 
-      // If startTime is 0, find the end of the last clip on the same track
+      // Determine actual start time
       let actualStartTime = startTime;
+      
+      // If startTime is 0, use current timeline cursor position
       if (startTime === 0) {
-        const clipsOnTrack = prev.filter(clip => clip.onTimeline && clip.track === trackId);
-        if (clipsOnTrack.length > 0) {
-          // Find the latest end time on this track
-          const latestEndTime = Math.max(...clipsOnTrack.map(clip => clip.endTime || 0));
-          actualStartTime = latestEndTime;
-        }
+        actualStartTime = currentTime; // Use current timeline cursor position
       }
 
       return prev.map(clip => {
@@ -276,7 +273,7 @@ function App() {
         return clip;
       });
     });
-  }, []);
+  }, [currentTime]);
 
   const removeClipFromTimeline = useCallback((clipId) => {
     setClips(prev => prev.map(clip => 
