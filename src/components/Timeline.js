@@ -169,6 +169,10 @@ const Timeline = ({
     e.preventDefault();
     setIsDragging(true);
     
+    // Store initial clip state
+    let draggedClip = null;
+    let draggedClipTrack = null;
+    
     const handleMouseMove = (moveEvent) => {
       if (!timelineRef.current) return;
       
@@ -177,16 +181,68 @@ const Timeline = ({
       const newTime = Math.max(0, x / pixelsPerSecond);
       const snappedTime = snapToPosition(newTime, clipId);
       
-      // Update clip position
-      onClipUpdate(prev => prev.map(clip => 
-        clip.id === clipId 
-          ? { ...clip, startTime: snappedTime, endTime: snappedTime + (clip.endTime - clip.startTime) }
-          : clip
-      ));
+      onClipUpdate(prev => {
+        // Get the dragged clip
+        if (!draggedClip) {
+          draggedClip = prev.find(clip => clip.id === clipId);
+          draggedClipTrack = draggedClip?.track;
+        }
+        if (!draggedClip) return prev;
+        
+        const dragDuration = draggedClip.endTime - draggedClip.startTime;
+        const newStartTime = snappedTime;
+        const newEndTime = newStartTime + dragDuration;
+        
+        // Find clips on the same track that would overlap
+        const otherClips = prev.filter(clip => 
+          clip.id !== clipId && 
+          clip.onTimeline && 
+          clip.track === draggedClipTrack
+        );
+        
+        // Check for overlap with any other clip
+        const overlappingClip = otherClips.find(otherClip => {
+          // Check if new position overlaps with existing clip
+          return (newStartTime < otherClip.endTime && newEndTime > otherClip.startTime);
+        });
+        
+        if (overlappingClip) {
+          // Swap positions: place dragged clip where the other clip was, and vice versa
+          const otherClipDuration = overlappingClip.endTime - overlappingClip.startTime;
+          
+          return prev.map(clip => {
+            if (clip.id === clipId) {
+              // Move dragged clip to the other clip's position
+              return {
+                ...clip,
+                startTime: overlappingClip.startTime,
+                endTime: overlappingClip.startTime + dragDuration
+              };
+            } else if (clip.id === overlappingClip.id) {
+              // Move other clip to the dragged clip's original position
+              return {
+                ...clip,
+                startTime: draggedClip.startTime,
+                endTime: draggedClip.startTime + otherClipDuration
+              };
+            }
+            return clip;
+          });
+        } else {
+          // No overlap - normal movement
+          return prev.map(clip => 
+            clip.id === clipId 
+              ? { ...clip, startTime: newStartTime, endTime: newEndTime }
+              : clip
+          );
+        }
+      });
     };
 
     const handleMouseUp = () => {
       setIsDragging(false);
+      draggedClip = null;
+      draggedClipTrack = null;
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
