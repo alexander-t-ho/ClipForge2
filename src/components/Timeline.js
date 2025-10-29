@@ -6,7 +6,7 @@ const CONFIG = {
   TRACK_HEIGHT: 80,
   MIN_CLIP_DURATION: 0.1,
   SNAP_THRESHOLD: 0.3,
-  CURSOR_OFFSET: 100, // 100px offset for cursor and 0:00 start
+  CURSOR_OFFSET: 50, // 50px offset for cursor and 0:00 start
   TIMELINE_SCALE_INTERVAL: 30 // 30 second intervals
 };
 
