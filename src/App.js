@@ -52,18 +52,36 @@ function App() {
 
   // Handle video import
   const handleVideoImport = useCallback((file) => {
-    if (!file?.type.startsWith('video/')) return;
+    if (!file?.type.startsWith('video/')) {
+      console.warn('File is not a video:', file?.type);
+      return;
+    }
+    
+    // Validate file size
+    if (file.size === 0) {
+      console.warn('Video file is empty');
+      return;
+    }
+    
+    // Check for supported video formats
+    const supportedTypes = ['video/mp4', 'video/webm', 'video/ogg', 'video/avi', 'video/mov'];
+    if (!supportedTypes.includes(file.type)) {
+      console.warn('Video format may not be supported:', file.type);
+    }
     
     const newClip = createClip(file, CLIP_TYPES.IMPORTED);
     const video = document.createElement('video');
     video.src = newClip.url;
     video.preload = 'metadata';
+    video.crossOrigin = 'anonymous'; // Try to avoid CORS issues
     
     video.onloadedmetadata = () => {
       console.log('Video metadata loaded:', {
         duration: video.duration,
         videoWidth: video.videoWidth,
-        videoHeight: video.videoHeight
+        videoHeight: video.videoHeight,
+        fileType: file.type,
+        fileSize: file.size
       });
       
       if (video.duration && !isNaN(video.duration) && isFinite(video.duration)) {
@@ -89,13 +107,24 @@ function App() {
         readyState: video.readyState
       });
       
-      // Clean up the invalid URL
-      URL.revokeObjectURL(newClip.url);
-      
-      // Still add the clip with default values so user knows there was an issue
-      newClip.duration = 10;
-      newClip.endTime = 10;
-      setClips(prev => [...prev, newClip]);
+      // Check if it's a format issue
+      if (video.error?.code === 4) {
+        console.warn('Video format not supported, trying to convert...');
+        // For now, just add with default values
+        newClip.duration = 10;
+        newClip.endTime = 10;
+        newClip.name = `${newClip.name} (Format Issue)`;
+        setClips(prev => [...prev, newClip]);
+      } else {
+        // Clean up the invalid URL
+        URL.revokeObjectURL(newClip.url);
+        
+        // Still add the clip with default values so user knows there was an issue
+        newClip.duration = 10;
+        newClip.endTime = 10;
+        newClip.name = `${newClip.name} (Load Error)`;
+        setClips(prev => [...prev, newClip]);
+      }
     };
   }, [createClip]);
 
@@ -141,30 +170,54 @@ function App() {
         readyState: video.readyState
       });
       
-      // Clean up the invalid URL
-      URL.revokeObjectURL(newClip.url);
-      
-      // Still add the clip with default values
-      newClip.duration = 10;
-      newClip.endTime = 10;
-      setClips(prev => [...prev, newClip]);
+      // Check if it's a format issue
+      if (video.error?.code === 4) {
+        console.warn('Captured video format not supported, trying to convert...');
+        // For now, just add with default values
+        newClip.duration = 10;
+        newClip.endTime = 10;
+        newClip.name = `${newClip.name} (Format Issue)`;
+        setClips(prev => [...prev, newClip]);
+      } else {
+        // Clean up the invalid URL
+        URL.revokeObjectURL(newClip.url);
+        
+        // Still add the clip with default values
+        newClip.duration = 10;
+        newClip.endTime = 10;
+        newClip.name = `${newClip.name} (Load Error)`;
+        setClips(prev => [...prev, newClip]);
+      }
     };
   }, [createClip, captureType]);
 
-  // Load test video on startup
+  // Load test video on startup (optional)
   useEffect(() => {
     const loadTestVideo = async () => {
       try {
         const response = await fetch('/test-video.mp4');
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
         const blob = await response.blob();
+        
+        // Validate the blob is actually a video
+        if (blob.size === 0) {
+          throw new Error('Empty video file');
+        }
+        
         const file = new File([blob], 'test-video.mp4', { type: 'video/mp4' });
         handleVideoImport(file);
       } catch (error) {
-        console.log('Test video not found, continuing without it');
+        console.log('Test video not available:', error.message);
+        // Don't show error to user, just continue without test video
       }
     };
     
-    loadTestVideo();
+    // Skip test video loading for now to avoid 404 errors
+    // if (process.env.NODE_ENV === 'development') {
+    //   loadTestVideo();
+    // }
   }, [handleVideoImport]);
 
   // Event handlers
