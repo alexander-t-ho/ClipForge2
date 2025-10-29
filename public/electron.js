@@ -3,10 +3,35 @@ const path = require('path');
 const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
 
+// Disable telemetry and metrics collection to prevent popup errors
+app.commandLine.appendSwitch('disable-features', 'VizDisplayCompositor');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('disable-ipc-flooding-protection');
+app.commandLine.appendSwitch('disable-background-networking');
+app.commandLine.appendSwitch('disable-default-apps');
+app.commandLine.appendSwitch('disable-extensions');
+app.commandLine.appendSwitch('disable-component-extensions-with-background-pages');
+app.commandLine.appendSwitch('disable-background-mode');
+app.commandLine.appendSwitch('disable-client-side-phishing-detection');
+app.commandLine.appendSwitch('disable-sync');
+app.commandLine.appendSwitch('disable-translate');
+app.commandLine.appendSwitch('disable-web-security');
+app.commandLine.appendSwitch('no-first-run');
+app.commandLine.appendSwitch('no-default-browser-check');
+app.commandLine.appendSwitch('disable-logging');
+app.commandLine.appendSwitch('silent');
+
+// Disable telemetry
+process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true';
+process.env.ELECTRON_DISABLE_GPU = 'false';
+
 // Check if we're in development mode
 const isDev = process.env.NODE_ENV === 'development' || process.env.npm_lifecycle_event === 'electron-dev';
 
 let mainWindow;
+let recordingControlWindow = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -16,7 +41,15 @@ function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
-      preload: path.join(__dirname, 'preload.js')
+      preload: path.join(__dirname, 'preload.js'),
+      // Disable additional telemetry and metrics
+      webSecurity: false,
+      allowRunningInsecureContent: true,
+      experimentalFeatures: false,
+      enableBlinkFeatures: '',
+      disableBlinkFeatures: 'VizDisplayCompositor',
+      // Enable screen capture and camera access
+      enableWebSQL: false
     },
     titleBarStyle: 'hiddenInset',
     show: false,
@@ -30,7 +63,47 @@ function createWindow() {
     ? 'http://localhost:3000' 
     : `file://${path.join(__dirname, '../build/index.html')}`;
   
-  mainWindow.loadURL(startUrl);
+  console.log('Loading URL:', startUrl);
+  mainWindow.loadURL(startUrl).catch(err => {
+    console.error('Failed to load URL:', err);
+  });
+
+  // Console message handler - show all errors and warnings for debugging
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    // Filter out only specific telemetry messages
+    if (message.includes('codemetrics') || message.includes('telemetry')) {
+      return;
+    }
+    
+    // Always show errors and warnings
+    if (level === 2) { // error
+      console.error(`[Console Error]: ${message}`);
+    } else if (level === 1) { // warning
+      console.warn(`[Console Warning]: ${message}`);
+    } else {
+      console.log(`[Console]: ${message}`);
+    }
+  });
+
+  // Handle page errors
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error('Failed to load page:', errorCode, errorDescription, validatedURL);
+  });
+
+  // Handle certificate errors silently
+  mainWindow.webContents.on('certificate-error', (event, url, error, certificate, callback) => {
+    event.preventDefault();
+    callback(true);
+  });
+
+  // Handle unresponsive pages
+  mainWindow.webContents.on('unresponsive', () => {
+    console.log('Page became unresponsive');
+  });
+
+  mainWindow.webContents.on('responsive', () => {
+    console.log('Page became responsive again');
+  });
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -38,12 +111,78 @@ function createWindow() {
 
   if (isDev) {
     mainWindow.webContents.openDevTools();
+    // Log when page loads
+    mainWindow.webContents.on('did-finish-load', () => {
+      console.log('Page finished loading');
+      mainWindow.webContents.executeJavaScript(`
+        console.log('Window location:', window.location.href);
+        console.log('Root element exists:', !!document.getElementById('root'));
+        console.log('Root element:', document.getElementById('root'));
+        if (typeof React !== 'undefined') {
+          console.log('React is available');
+        } else {
+          console.error('React is NOT available');
+        }
+      `).catch(err => console.error('JS execution error:', err));
+    });
+    
+    // Log when DOM is ready
+    mainWindow.webContents.on('dom-ready', () => {
+      console.log('DOM is ready');
+    });
+    
+    // Log any failed navigation
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      console.error('Failed to load:', errorCode, errorDescription, validatedURL);
+    });
   }
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
+
+function createRecordingControlWindow() {
+  if (recordingControlWindow) {
+    recordingControlWindow.focus();
+    return recordingControlWindow;
+  }
+
+  recordingControlWindow = new BrowserWindow({
+    width: 400,
+    height: 90,
+    resizable: false,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  });
+
+  // Load the recording control HTML
+  recordingControlWindow.loadFile(path.join(__dirname, 'recording-control.html'));
+
+  recordingControlWindow.on('closed', () => {
+    recordingControlWindow = null;
+  });
+
+  return recordingControlWindow;
+}
+
+// Global error handling to prevent popups
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Don't exit the process, just log the error
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit the process, just log the error
+});
 
 app.whenReady().then(createWindow);
 
@@ -63,38 +202,58 @@ app.on('activate', () => {
 ipcMain.handle('get-screen-sources', async () => {
   try {
     const sources = await desktopCapturer.getSources({
-      types: ['screen', 'window']
+      types: ['screen', 'window'],
+      thumbnailSize: { width: 150, height: 150 }
     });
-    return sources;
+
+    console.log('desktopCapturer returned', sources.length, 'sources');
+
+    // Convert sources to plain objects without thumbnails (thumbnails can cause IPC issues)
+    const simpleSources = sources.map(source => ({
+      id: source.id,
+      name: source.name,
+      display_id: source.display_id,
+      appIcon: null // Don't send thumbnail data through IPC
+    }));
+
+    console.log('Returning sources:', simpleSources);
+    return simpleSources;
   } catch (error) {
     console.error('Error getting screen sources:', error);
     return [];
   }
 });
 
-// Screen recording functionality - moved to renderer process
-ipcMain.handle('start-screen-recording', async (event, sourceId) => {
-  try {
-    // Send the request to the renderer process
-    const result = await event.sender.invoke('start-screen-recording-renderer', sourceId);
-    return result;
-  } catch (error) {
-    console.error('Error starting screen recording:', error);
-    throw error;
+// Recording control window handlers
+ipcMain.handle('show-recording-control', () => {
+  const window = createRecordingControlWindow();
+  return true;
+});
+
+ipcMain.handle('close-recording-control', () => {
+  if (recordingControlWindow) {
+    recordingControlWindow.close();
+    recordingControlWindow = null;
+  }
+  return true;
+});
+
+// Forward recording control events to main window
+ipcMain.on('recording-control-action', (event, action) => {
+  if (mainWindow) {
+    mainWindow.webContents.send('recording-control-action', action);
   }
 });
 
-// Webcam recording functionality - moved to renderer process  
-ipcMain.handle('start-webcam-recording', async (event, constraints) => {
-  try {
-    // Send the request to the renderer process
-    const result = await event.sender.invoke('start-webcam-recording-renderer', constraints);
-    return result;
-  } catch (error) {
-    console.error('Error starting webcam recording:', error);
-    throw error;
+// Update recording time in control window
+ipcMain.on('update-recording-time', (event, time) => {
+  if (recordingControlWindow) {
+    recordingControlWindow.webContents.send('update-recording-time', time);
   }
 });
+
+// Screen recording and webcam recording are handled directly in preload.js via getUserMedia
+// No IPC handlers needed - the renderer process calls getUserMedia directly with Electron-specific constraints
 
 // File operations
 ipcMain.handle('open-file-dialog', async () => {

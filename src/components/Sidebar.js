@@ -20,11 +20,30 @@ const Sidebar = ({
   }, []);
 
   const handleDragStart = useCallback((e, clip) => {
-    if (clip.onTimeline) return;
+    // Only allow dragging clips that are not already on timeline
+    // The draggable attribute should prevent this, but double-check
+    if (clip.onTimeline) {
+      e.preventDefault();
+      return;
+    }
     
     setDraggedClip(clip);
     e.dataTransfer.setData('text/plain', clip.id.toString());
     e.dataTransfer.effectAllowed = 'move';
+    
+    // Add visual feedback with custom drag image
+    if (e.dataTransfer.setDragImage) {
+      const dragImage = document.createElement('div');
+      dragImage.textContent = clip.name;
+      dragImage.style.cssText = 'padding: 8px; background: rgba(0,0,0,0.8); color: white; border-radius: 4px; position: absolute; top: -1000px; pointer-events: none;';
+      document.body.appendChild(dragImage);
+      e.dataTransfer.setDragImage(dragImage, 0, 0);
+      setTimeout(() => {
+        if (document.body.contains(dragImage)) {
+          document.body.removeChild(dragImage);
+        }
+      }, 0);
+    }
   }, []);
 
   const handleDragEnd = useCallback(() => {
