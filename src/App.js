@@ -513,23 +513,38 @@ function App() {
       // If we have a pending play action, trigger it now
       if (pendingPlayRef.current) {
         const tryPlay = () => {
-          if (video.readyState >= 2) {
-            pendingPlayRef.current = false;
-            const relativeTime = Math.max(0, currentTime - currentClip.startTime);
-            if (relativeTime >= 0 && relativeTime <= currentClip.duration) {
-              video.currentTime = relativeTime;
-            }
-            video.play().catch(err => {
+          pendingPlayRef.current = false;
+          const relativeTime = Math.max(0, currentTime - currentClip.startTime);
+          if (relativeTime >= 0 && relativeTime <= currentClip.duration) {
+            video.currentTime = relativeTime;
+          }
+          video.play()
+            .then(() => {
+              console.log('Pending play successful');
+              setIsPlaying(true);
+            })
+            .catch(err => {
               console.error('Error playing video after selection:', err);
               setIsPlaying(false);
             });
-            setIsPlaying(true);
-          } else {
-            // Wait for video to be ready
-            video.addEventListener('loadeddata', tryPlay, { once: true });
-          }
         };
-        tryPlay();
+
+        if (video.readyState >= 3) {
+          // Ready to play immediately
+          tryPlay();
+        } else if (video.readyState >= 2) {
+          // Try to play, but also wait for canplay
+          tryPlay();
+          video.addEventListener('canplay', tryPlay, { once: true });
+        } else {
+          // Wait for video to be ready
+          video.addEventListener('canplay', tryPlay, { once: true });
+          video.addEventListener('loadeddata', () => {
+            if (video.readyState >= 2) {
+              tryPlay();
+            }
+          }, { once: true });
+        }
       }
     } else {
       // No clip at current time, pause video
@@ -622,8 +637,10 @@ function App() {
 
     if (isPlaying) {
       // Pause
+      console.log('Pausing video');
       video.pause();
       setIsPlaying(false);
+      pendingPlayRef.current = false;
     } else {
       // Play
       const currentClip = getCurrentClip();
@@ -642,46 +659,80 @@ function App() {
           setCurrentTime(currentClip.startTime);
         }
 
-        // Wait for video to be ready before playing
-        video.addEventListener('loadeddata', () => {
-          video.play().catch(err => {
-            console.error('Error playing video:', err);
-            setIsPlaying(false);
-          });
-        }, { once: true });
+        // Play video - wait for it to be ready if needed
+        const playVideo = () => {
+          video.play()
+            .then(() => {
+              console.log('Video playing successfully');
+              setIsPlaying(true);
+            })
+            .catch(err => {
+              console.error('Error playing video:', err);
+              setIsPlaying(false);
+            });
+        };
 
-        // If already loaded, play immediately
-        if (video.readyState >= 2) {
-          video.play().catch(err => {
-            console.error('Error playing video:', err);
-            setIsPlaying(false);
-          });
+        // Check if video can play (readyState >= 2 means we have current frame data)
+        // Use 'canplay' event which fires when enough data is available to start playing
+        if (video.readyState >= 3) {
+          // Have future data, can play immediately
+          console.log('Video ready (readyState >= 3), playing now');
+          playVideo();
+        } else if (video.readyState >= 2) {
+          // Have current data, try to play (might work)
+          console.log('Video has current data, attempting to play');
+          playVideo();
+          // Also listen for canplay in case it needs more data
+          video.addEventListener('canplay', playVideo, { once: true });
+        } else {
+          // Wait for video to have enough data to play
+          console.log('Video not ready (readyState:', video.readyState, '), waiting for canplay');
+          video.addEventListener('canplay', playVideo, { once: true });
+          // Fallback to loadeddata if canplay doesn't fire
+          video.addEventListener('loadeddata', () => {
+            if (video.readyState >= 2) {
+              playVideo();
+            }
+          }, { once: true });
         }
-
-        setIsPlaying(true);
       } else {
         // No clip at current time, try to find first clip
+        console.log('No clip at cursor, finding first clip');
         const timelineClips = clips.filter(clip => clip.onTimeline).sort((a, b) => a.startTime - b.startTime);
         if (timelineClips.length > 0) {
           const firstClip = timelineClips[0];
+          console.log('Playing from first clip:', firstClip.name);
           setCurrentTime(firstClip.startTime);
           setSelectedClip(firstClip);
           video.src = firstClip.url;
           video.currentTime = 0;
 
-          video.addEventListener('loadeddata', () => {
-            video.play().catch(err => {
-              console.error('Error playing first clip:', err);
-              setIsPlaying(false);
-            });
-          }, { once: true });
+          const playFirstClip = () => {
+            video.play()
+              .then(() => {
+                console.log('First clip playing successfully');
+                setIsPlaying(true);
+              })
+              .catch(err => {
+                console.error('Error playing first clip:', err);
+                setIsPlaying(false);
+              });
+          };
 
+          // Wait for video to be ready before playing
+          video.addEventListener('canplay', playFirstClip, { once: true });
+          video.addEventListener('loadeddata', () => {
+            if (video.readyState >= 2) {
+              playFirstClip();
+            }
+          }, { once: true });
           video.load();
-          setIsPlaying(true);
+        } else {
+          console.log('No clips on timeline');
         }
       }
     }
-  }, [isPlaying, getCurrentClip, currentTime, clips]);
+  }, [isPlaying, getCurrentClip, currentTime, clips, selectedClip]);
 
   // Format time helper
   const formatTime = useCallback((seconds) => {
