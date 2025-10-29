@@ -6,9 +6,9 @@ const CONFIG = {
   TRACK_HEIGHT: 80,
   MIN_CLIP_DURATION: 0.1,
   SNAP_THRESHOLD: 0.3,
-  CURSOR_OFFSET: 100, // 100px offset for cursor position
-  VIDEO_START_OFFSET: 50, // 50px offset for video start (50px to the left of cursor)
-  TIMELINE_SCALE_INTERVAL: 30 // 30 second intervals
+  CURSOR_OFFSET: 200, // 200px offset for cursor position (more space on left)
+  VIDEO_START_OFFSET: 0, // Videos start at cursor position
+  TIMELINE_SCALE_INTERVAL: 10 // 10 second intervals (matches reference)
 };
 
 const TRACKS = [
@@ -59,19 +59,21 @@ const Timeline = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }, []);
 
-  // Calculate timeline scale markers (30 second intervals)
+  // Calculate timeline scale markers (10 second intervals)
   const getTimelineMarkers = useCallback(() => {
     const markers = [];
-    const maxTime = Math.max(30, ...clips.map(clip => clip.endTime || 0));
+    // Show at least 60 seconds worth of timeline, or extend beyond the last clip
+    const maxClipTime = clips.length > 0 ? Math.max(...clips.map(clip => clip.endTime || 0)) : 0;
+    const maxTime = Math.max(60, maxClipTime + 20); // Always show extra 20s beyond last clip
     const interval = CONFIG.TIMELINE_SCALE_INTERVAL;
-    
+
     for (let time = 0; time <= maxTime; time += interval) {
       markers.push({
         time,
         position: CONFIG.CURSOR_OFFSET + (time * pixelsPerSecond)
       });
     }
-    
+
     return markers;
   }, [clips, pixelsPerSecond]);
 
@@ -122,11 +124,11 @@ const Timeline = ({
   // Handle timeline click
   const handleTimelineClick = useCallback((e) => {
     if (!timelineRef.current) return;
-    
+
     const rect = timelineRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left - CONFIG.CURSOR_OFFSET;
-    const time = Math.max(0, x / pixelsPerSecond);
-    
+    const time = Math.max(0, x / pixelsPerSecond); // Never allow negative time
+
     if (isClippingMode && onTimelineClickClipping) {
       onTimelineClickClipping(time);
     } else {
@@ -446,8 +448,8 @@ const Timeline = ({
                   })}
                 {clips.filter(clip => clip.track === track.id).length === 0 && (
                   <div className="empty-track">
-                    <div className="empty-track-icon">🎬</div>
-                    <div>Drag media here</div>
+                    <div className="empty-track-icon">📽️</div>
+                    <div>Drag material here and start to create</div>
                   </div>
                 )}
               </div>
@@ -457,10 +459,10 @@ const Timeline = ({
           {/* Clipping Window Overlay */}
           {isClippingMode && selectedClip && (
             <div className="clipping-window-overlay">
-              <div 
+              <div
                 className="clipping-window"
                 style={{
-                  left: CONFIG.VIDEO_START_OFFSET + Math.min(clippingStartTime, clippingEndTime) * pixelsPerSecond,
+                  left: CONFIG.CURSOR_OFFSET + Math.min(clippingStartTime, clippingEndTime) * pixelsPerSecond,
                   width: Math.abs(clippingEndTime - clippingStartTime) * pixelsPerSecond,
                   height: TRACKS.length * CONFIG.TRACK_HEIGHT
                 }}

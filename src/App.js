@@ -252,28 +252,18 @@ function App() {
       }
 
       // Determine actual start time
-      let actualStartTime = startTime;
+      let actualStartTime;
 
-      // If startTime is 0 or undefined (clicking "Add to Timeline" button)
-      // Place the clip intelligently:
-      // - If no clips on this track, start at 0:00
-      // - Otherwise, place after the last clip on this track
+      // When clicking "Add to Timeline" button (startTime is 0 or undefined)
+      // Place the clip at the current cursor position
       if (startTime === 0 || startTime === undefined) {
-        const clipsOnTrack = prev.filter(c => c.onTimeline && c.track === trackId);
-
-        if (clipsOnTrack.length === 0) {
-          // No clips on this track, start at 0:00
-          actualStartTime = 0;
-        } else {
-          // Find the last clip on this track and place the new clip after it
-          const lastClip = clipsOnTrack.reduce((latest, clip) =>
-            (!latest || clip.endTime > latest.endTime) ? clip : latest
-          , null);
-          actualStartTime = lastClip ? lastClip.endTime : 0;
-        }
+        actualStartTime = Math.max(0, currentTime); // Use current cursor position, but never before 0:00
+      } else {
+        // When dragging to timeline, use the drop position
+        actualStartTime = Math.max(0, startTime); // Never before 0:00
       }
 
-      return prev.map(clip => {
+      const updatedClips = prev.map(clip => {
         if (clip.id === clipId) {
           return {
             ...clip,
@@ -286,8 +276,13 @@ function App() {
         }
         return clip;
       });
+
+      // Set this clip as selected so it shows in the preview
+      setSelectedClip(updatedClips.find(c => c.id === clipId));
+
+      return updatedClips;
     });
-  }, []);
+  }, [currentTime]);
 
   const removeClipFromTimeline = useCallback((clipId) => {
     setClips(prev => prev.map(clip => 
@@ -481,7 +476,11 @@ function App() {
     const currentClip = getCurrentClip();
     const video = videoRef.current;
 
-    if (!video) return;
+    // Video element is conditionally rendered, so it might not exist yet
+    // This is expected behavior - silently return if video isn't mounted
+    if (!video) {
+      return;
+    }
 
     if (currentClip) {
       // Check if we need to change the video source
@@ -491,7 +490,7 @@ function App() {
       }
 
       // Set the video time to the relative position within the clip
-      const relativeTime = currentTime - currentClip.startTime;
+      const relativeTime = Math.max(0, currentTime - currentClip.startTime);
       if (relativeTime >= 0 && relativeTime <= currentClip.duration) {
         // Only update if the difference is significant (more than 0.1s)
         // This prevents fighting with the video's own timeupdate events
@@ -504,13 +503,18 @@ function App() {
       if (!isPlaying && !video.paused) {
         video.pause();
       }
+
+      // Ensure selectedClip is set for preview
+      if (!selectedClip || selectedClip.id !== currentClip.id) {
+        setSelectedClip(currentClip);
+      }
     } else {
       // No clip at current time, pause video
       if (!video.paused) {
         video.pause();
       }
     }
-  }, [getCurrentClip, currentTime, isPlaying]);
+  }, [getCurrentClip, currentTime, isPlaying, selectedClip]);
 
   // Get next clip helper
   const getNextClip = useCallback((afterTime) => {
@@ -524,6 +528,7 @@ function App() {
   // Handle video events
   useEffect(() => {
     const video = videoRef.current;
+    // Video element might not be mounted yet - this is expected
     if (!video) return;
 
     const handleEnded = () => {
@@ -574,12 +579,19 @@ function App() {
   // Playback control
   const handlePlayPause = useCallback(() => {
     const video = videoRef.current;
-    
+
     if (!video) {
-      console.warn('Video element not available');
+      // Video element isn't mounted yet - this can happen if no clip is selected
+      // Try to set selectedClip if there's a clip at current time
+      const currentClip = getCurrentClip();
+      if (currentClip) {
+        setSelectedClip(currentClip);
+        // Video will be available after re-render, but we can't play yet
+        return;
+      }
       return;
     }
-    
+
     if (isPlaying) {
       // Pause
       video.pause();
@@ -593,19 +605,31 @@ function App() {
           video.src = currentClip.url;
           video.load();
         }
-        
-        const relativeTime = currentTime - currentClip.startTime;
+
+        const relativeTime = Math.max(0, currentTime - currentClip.startTime);
         if (relativeTime >= 0 && relativeTime <= currentClip.duration) {
           video.currentTime = relativeTime;
         } else {
           video.currentTime = 0;
           setCurrentTime(currentClip.startTime);
         }
-        
-        video.play().catch(err => {
-          console.error('Error playing video:', err);
-          setIsPlaying(false);
-        });
+
+        // Wait for video to be ready before playing
+        video.addEventListener('loadeddata', () => {
+          video.play().catch(err => {
+            console.error('Error playing video:', err);
+            setIsPlaying(false);
+          });
+        }, { once: true });
+
+        // If already loaded, play immediately
+        if (video.readyState >= 2) {
+          video.play().catch(err => {
+            console.error('Error playing video:', err);
+            setIsPlaying(false);
+          });
+        }
+
         setIsPlaying(true);
       } else {
         // No clip at current time, try to find first clip
@@ -613,13 +637,18 @@ function App() {
         if (timelineClips.length > 0) {
           const firstClip = timelineClips[0];
           setCurrentTime(firstClip.startTime);
+          setSelectedClip(firstClip);
           video.src = firstClip.url;
           video.currentTime = 0;
+
+          video.addEventListener('loadeddata', () => {
+            video.play().catch(err => {
+              console.error('Error playing first clip:', err);
+              setIsPlaying(false);
+            });
+          }, { once: true });
+
           video.load();
-          video.play().catch(err => {
-            console.error('Error playing first clip:', err);
-            setIsPlaying(false);
-          });
           setIsPlaying(true);
         }
       }
