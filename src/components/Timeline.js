@@ -6,8 +6,8 @@ const CONFIG = {
   TRACK_HEIGHT: 80,
   MIN_CLIP_DURATION: 0.1,
   SNAP_THRESHOLD: 0.3,
-  CURSOR_OFFSET: 200, // 200px offset for cursor position (more space on left)
-  VIDEO_START_OFFSET: 200, // Videos start at same offset as cursor so they align
+  CURSOR_OFFSET: 80, // Minimal offset - aligns cursor/0:00 with start of tracks
+  VIDEO_START_OFFSET: 80, // Videos start at same offset as cursor so they align
   TIMELINE_SCALE_INTERVAL: 10 // 10 second intervals (matches reference)
 };
 
@@ -59,12 +59,16 @@ const Timeline = ({
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   }, []);
 
+  // Calculate total timeline duration (max endTime of all clips)
+  const totalDuration = clips.length > 0 ? Math.max(...clips.map(clip => clip.endTime || 0)) : 0;
+
   // Calculate timeline scale markers (10 second intervals)
   const getTimelineMarkers = useCallback(() => {
     const markers = [];
-    // Show at least 60 seconds worth of timeline, or extend beyond the last clip
+    // Timeline duration is the maximum endTime of all clips on the timeline
+    // Use exact duration, or minimum 60 seconds if no clips
     const maxClipTime = clips.length > 0 ? Math.max(...clips.map(clip => clip.endTime || 0)) : 0;
-    const maxTime = Math.max(60, maxClipTime + 20); // Always show extra 20s beyond last clip
+    const maxTime = Math.max(60, maxClipTime);
     const interval = CONFIG.TIMELINE_SCALE_INTERVAL;
 
     for (let time = 0; time <= maxTime; time += interval) {
@@ -345,7 +349,7 @@ const Timeline = ({
         </div>
         
         <div className="timeline-timecode">
-          {formatTime(currentTime)} / {formatTime(30)}
+          {formatTime(currentTime)} / {formatTime(totalDuration || 30)}
         </div>
         <div className="timeline-zoom-controls">
           <button className="timeline-zoom-btn" onClick={() => onZoomChange(Math.max(0.5, zoom - 0.1))}>-</button>
@@ -360,8 +364,16 @@ const Timeline = ({
         onClick={handleTimelineClick}
         onDrop={handleTimelineDrop}
         onDragOver={handleTimelineDragOver}
+        style={{ overflowX: 'auto', overflowY: 'hidden' }}
       >
-        <div className="timeline-ruler" ref={timelineRef}>
+        <div 
+          className="timeline-ruler" 
+          ref={timelineRef}
+          style={{ 
+            width: `${CONFIG.CURSOR_OFFSET + (totalDuration || 60) * pixelsPerSecond}px`,
+            minWidth: '100%'
+          }}
+        >
           {/* Timeline scale markers */}
           {timelineMarkers.map(marker => (
             <div
@@ -375,7 +387,13 @@ const Timeline = ({
           ))}
         </div>
         
-        <div className="timeline-tracks">
+        <div 
+          className="timeline-tracks"
+          style={{ 
+            width: `${CONFIG.CURSOR_OFFSET + (totalDuration || 60) * pixelsPerSecond}px`,
+            minWidth: '100%'
+          }}
+        >
           {TRACKS.map(track => (
             <div key={track.id} className="track">
               <div className="track-content">

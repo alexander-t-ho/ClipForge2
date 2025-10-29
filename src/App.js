@@ -26,6 +26,7 @@ function App() {
   const [captureType, setCaptureType] = useState(CAPTURE_TYPES.SCREEN);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
+  const [aspectRatio, setAspectRatio] = useState('16:9'); // '16:9' for fullscreen, '9:16' for iPhone
   
   // Clipping state
   const [isClippingMode, setIsClippingMode] = useState(false);
@@ -771,21 +772,88 @@ function App() {
             <h1>ClipForge</h1>
           </button>
         </div>
-        
+
         <div className="header-center">
-          <div className="nav-tabs">
-            <button className="nav-tab active">Edit</button>
-            <button className="nav-tab">Cut</button>
-            <button className="nav-tab">Audio</button>
-            <button className="nav-tab">Text</button>
-            <button className="nav-tab">Effects</button>
+          <div className="project-title">
+            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '500' }}>Untitled Project</h2>
           </div>
         </div>
-        
+
         <div className="header-right">
-          <div className="project-info">
-            <div className="project-name">Untitled Project</div>
-            <div className="project-path">~/Desktop/ClipForge</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Aspect Ratio Selector */}
+            <div style={{ display: 'flex', gap: '4px', backgroundColor: '#2a2a2a', borderRadius: '6px', padding: '4px' }}>
+              <button
+                className={`aspect-ratio-btn ${aspectRatio === '16:9' ? 'active' : ''}`}
+                onClick={() => setAspectRatio('16:9')}
+                style={{
+                  padding: '6px 12px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  backgroundColor: aspectRatio === '16:9' ? '#007AFF' : 'transparent',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s'
+                }}
+                title="Fullscreen (16:9)"
+              >
+                🖥️ 16:9
+              </button>
+              <button
+                className={`aspect-ratio-btn ${aspectRatio === '9:16' ? 'active' : ''}`}
+                onClick={() => setAspectRatio('9:16')}
+                style={{
+                  padding: '6px 12px',
+                  border: 'none',
+                  borderRadius: '4px',
+                  backgroundColor: aspectRatio === '9:16' ? '#007AFF' : 'transparent',
+                  color: 'white',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  transition: 'all 0.2s'
+                }}
+                title="iPhone (9:16)"
+              >
+                📱 9:16
+              </button>
+            </div>
+
+            {/* Export Button */}
+            <button
+              className="export-btn"
+              onClick={handleExport}
+              disabled={isExporting || clips.filter(c => c.onTimeline).length === 0}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#007AFF',
+                border: 'none',
+                borderRadius: '6px',
+                color: 'white',
+                cursor: isExporting ? 'not-allowed' : 'pointer',
+                fontSize: '14px',
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                opacity: isExporting || clips.filter(c => c.onTimeline).length === 0 ? 0.5 : 1,
+                transition: 'all 0.2s'
+              }}
+            >
+              {isExporting ? (
+                <>
+                  <span>⏳</span>
+                  <span>Exporting... {Math.round(exportProgress)}%</span>
+                </>
+              ) : (
+                <>
+                  <span>📤</span>
+                  <span>Export</span>
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -920,14 +988,40 @@ function App() {
         <div className="capcut-center-panel">
           {/* Video Preview */}
           <div className="video-preview-panel">
-            <div className="video-container">
+            <div
+              className="video-container"
+              style={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                width: '100%',
+                height: '100%',
+                backgroundColor: '#000'
+              }}
+            >
               {/* Always render video element so ref is always available */}
-              <div className="custom-video-player">
+              <div
+                className="custom-video-player"
+                style={{
+                  width: aspectRatio === '9:16' ? 'auto' : '100%',
+                  height: aspectRatio === '9:16' ? '100%' : 'auto',
+                  maxWidth: aspectRatio === '9:16' ? 'calc(100vh * 9 / 16)' : '100%',
+                  maxHeight: aspectRatio === '9:16' ? '100%' : 'calc(100vw * 9 / 16)',
+                  aspectRatio: aspectRatio === '9:16' ? '9/16' : '16/9',
+                  position: 'relative',
+                  backgroundColor: '#000'
+                }}
+              >
                 <video
                   ref={videoRef}
                   className="preview-video"
                   src={selectedClip?.url || ''}
-                  style={{ display: selectedClip ? 'block' : 'none' }}
+                  style={{
+                    display: selectedClip ? 'block' : 'none',
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain'
+                  }}
                   onTimeUpdate={(e) => {
                     const currentClip = getCurrentClip();
                     if (currentClip) {
