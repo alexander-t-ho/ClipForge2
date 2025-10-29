@@ -34,6 +34,7 @@ function App() {
   const [isDraggingClippingWindow, setIsDraggingClippingWindow] = useState(false);
 
   const videoRef = useRef(null);
+  const pendingPlayRef = useRef(false);
 
   // Create clip helper
   const createClip = useCallback((file, type, name) => ({
@@ -500,7 +501,7 @@ function App() {
       }
 
       // If not playing, pause the video to show the frame
-      if (!isPlaying && !video.paused) {
+      if (!isPlaying && !video.paused && !pendingPlayRef.current) {
         video.pause();
       }
 
@@ -508,11 +509,34 @@ function App() {
       if (!selectedClip || selectedClip.id !== currentClip.id) {
         setSelectedClip(currentClip);
       }
+
+      // If we have a pending play action, trigger it now
+      if (pendingPlayRef.current) {
+        const tryPlay = () => {
+          if (video.readyState >= 2) {
+            pendingPlayRef.current = false;
+            const relativeTime = Math.max(0, currentTime - currentClip.startTime);
+            if (relativeTime >= 0 && relativeTime <= currentClip.duration) {
+              video.currentTime = relativeTime;
+            }
+            video.play().catch(err => {
+              console.error('Error playing video after selection:', err);
+              setIsPlaying(false);
+            });
+            setIsPlaying(true);
+          } else {
+            // Wait for video to be ready
+            video.addEventListener('loadeddata', tryPlay, { once: true });
+          }
+        };
+        tryPlay();
+      }
     } else {
       // No clip at current time, pause video
       if (!video.paused) {
         video.pause();
       }
+      pendingPlayRef.current = false;
     }
   }, [getCurrentClip, currentTime, isPlaying, selectedClip]);
 
@@ -586,7 +610,11 @@ function App() {
       const currentClip = getCurrentClip();
       if (currentClip) {
         setSelectedClip(currentClip);
-        // Video will be available after re-render, but we can't play yet
+        // Mark that we want to play once the video is ready
+        if (!isPlaying) {
+          pendingPlayRef.current = true;
+        }
+        // Video will be available after re-render, and the useEffect will trigger play
         return;
       }
       return;
@@ -823,36 +851,45 @@ function App() {
           {/* Video Preview */}
           <div className="video-preview-panel">
             <div className="video-container">
-              {selectedClip ? (
-                <div className="custom-video-player">
-                  <video
-                    ref={videoRef}
-                    className="preview-video"
-                    src={selectedClip.url}
-                    onTimeUpdate={(e) => {
-                      const currentClip = getCurrentClip();
-                      if (currentClip) {
-                        const newTime = currentClip.startTime + e.target.currentTime;
-                        setCurrentTime(newTime);
+              {/* Always render video element so ref is always available */}
+              <div className="custom-video-player">
+                <video
+                  ref={videoRef}
+                  className="preview-video"
+                  src={selectedClip?.url || ''}
+                  style={{ display: selectedClip ? 'block' : 'none' }}
+                  onTimeUpdate={(e) => {
+                    const currentClip = getCurrentClip();
+                    if (currentClip) {
+                      const newTime = currentClip.startTime + e.target.currentTime;
+                      setCurrentTime(newTime);
+                    }
+                  }}
+                  onPlay={() => setIsPlaying(true)}
+                  onPause={() => setIsPlaying(false)}
+                  onEnded={() => {
+                    const currentClip = getCurrentClip();
+                    if (currentClip) {
+                      const nextClip = clips.filter(clip => clip.onTimeline).find(clip => clip.startTime >= currentClip.endTime);
+                      if (nextClip) {
+                        setCurrentTime(nextClip.startTime);
+                        videoRef.current.src = nextClip.url;
+                        videoRef.current.currentTime = 0;
+                        videoRef.current.play();
+                      } else {
+                        setIsPlaying(false);
                       }
-                    }}
-                    onPlay={() => setIsPlaying(true)}
-                    onPause={() => setIsPlaying(false)}
-                    onEnded={() => {
-                      const currentClip = getCurrentClip();
-                      if (currentClip) {
-                        const nextClip = clips.filter(clip => clip.onTimeline).find(clip => clip.startTime >= currentClip.endTime);
-                        if (nextClip) {
-                          setCurrentTime(nextClip.startTime);
-                          videoRef.current.src = nextClip.url;
-                          videoRef.current.currentTime = 0;
-                          videoRef.current.play();
-                        } else {
-                          setIsPlaying(false);
-                        }
-                      }
-                    }}
-                  />
+                    }
+                  }}
+                />
+                {!selectedClip && (
+                  <div className="no-video">
+                    <div className="no-video-icon">🎬</div>
+                    <h2>No Video Loaded</h2>
+                    <p>Import a video file or add clips to the timeline to see the preview</p>
+                  </div>
+                )}
+                {selectedClip && (
                   <div className="video-overlay">
                     <button 
                       className="play-button"
@@ -861,14 +898,8 @@ function App() {
                       {isPlaying ? '⏸️' : '▶️'}
                     </button>
                   </div>
-                </div>
-              ) : (
-                <div className="no-video">
-                  <div className="no-video-icon">🎬</div>
-                  <h2>No Video Loaded</h2>
-                  <p>Import a video file or add clips to the timeline to see the preview</p>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         </div>
