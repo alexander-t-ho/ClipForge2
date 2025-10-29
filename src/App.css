@@ -1,4 +1,9 @@
-/* App.css - Main application styles */
+/* 
+ * ClipForge2 - Video Editor Styles
+ * Organized by component sections for better maintainability
+ */
+
+/* ===== MAIN LAYOUT ===== */
 .app {
   display: flex;
   flex-direction: column;
@@ -25,7 +30,7 @@
   width: 100%;
 }
 
-/* Header Styles */
+/* ===== HEADER COMPONENT ===== */
 .header {
   display: flex;
   align-items: center;
@@ -152,7 +157,7 @@
   background-color: #D70015;
 }
 
-/* Sidebar Styles */
+/* ===== SIDEBAR COMPONENT ===== */
 .sidebar {
   width: 200px; /* Further reduced for 13-inch MacBook */
   background-color: #252525;
@@ -270,7 +275,7 @@
   justify-content: center;
 }
 
-/* Preview Styles */
+/* ===== PREVIEW COMPONENT ===== */
 .preview {
   height: 200px; /* Reduced from 300px for smaller screens */
   background-color: #000000;
@@ -311,7 +316,7 @@
   gap: 8px;
 }
 
-/* Timeline Styles */
+/* ===== TIMELINE COMPONENT ===== */
 .timeline {
   flex: 1;
   background-color: #2a2a2a;

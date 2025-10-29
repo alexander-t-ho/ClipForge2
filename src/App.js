@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import './App.css';
 
 // Components
@@ -9,23 +9,47 @@ import Preview from './components/Preview';
 import VideoImporter from './components/VideoImporter';
 import MediaCapture from './components/MediaCapture';
 
+// Constants
+const CAPTURE_TYPES = {
+  SCREEN: 'screen',
+  WEBCAM: 'webcam'
+};
+
+const CLIP_TYPES = {
+  IMPORTED: 'imported',
+  SCREEN_CAPTURE: 'screen_capture',
+  WEBCAM_CAPTURE: 'webcam_capture'
+};
+
 function App() {
+  // Core state
   const [clips, setClips] = useState([]);
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [selectedClip, setSelectedClip] = useState(null);
+  
+  // UI state
   const [timelineZoom, setTimelineZoom] = useState(1);
+  const [showSidebar, setShowSidebar] = useState(true);
   const [showImporter, setShowImporter] = useState(false);
   const [showMediaCapture, setShowMediaCapture] = useState(false);
-  const [captureType, setCaptureType] = useState('screen'); // 'screen' or 'webcam'
+  
+  // Capture state
+  const [captureType, setCaptureType] = useState(CAPTURE_TYPES.SCREEN);
+  
+  // Export state
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
-  const [showSidebar, setShowSidebar] = useState(true); // Track sidebar visibility
 
   const videoRef = useRef(null);
 
-  // Handle video import
-  const handleVideoImport = (file) => {
+  // Handle video import with error handling
+  const handleVideoImport = useCallback((file) => {
+    if (!file || !file.type.startsWith('video/')) {
+      console.error('Invalid file type. Please select a video file.');
+      return;
+    }
+
     const newClip = {
       id: Date.now(),
       name: file.name,
@@ -34,59 +58,80 @@ function App() {
       duration: 0,
       startTime: 0,
       endTime: 0,
-      position: 0, // Don't auto-position on timeline
-      track: -1, // -1 means not on timeline
-      type: 'imported', // Track the source type
-      onTimeline: false // Track if it's on timeline
+      position: 0,
+      track: -1,
+      type: CLIP_TYPES.IMPORTED,
+      onTimeline: false
     };
 
-    // Get video duration
+    // Get video duration with error handling
     const video = document.createElement('video');
     video.src = newClip.url;
+    
     video.onloadedmetadata = () => {
       newClip.duration = video.duration;
       newClip.endTime = video.duration;
       setClips(prev => [...prev, newClip]);
     };
-  };
+    
+    video.onerror = () => {
+      console.error('Error loading video metadata');
+      URL.revokeObjectURL(newClip.url);
+    };
+  }, []);
 
-  // Handle media capture (screen/webcam)
-  const handleMediaCapture = (file) => {
+  // Handle media capture with improved error handling
+  const handleMediaCapture = useCallback((file) => {
+    if (!file) {
+      console.error('No file provided for media capture');
+      return;
+    }
+
+    const clipType = captureType === CAPTURE_TYPES.SCREEN 
+      ? CLIP_TYPES.SCREEN_CAPTURE 
+      : CLIP_TYPES.WEBCAM_CAPTURE;
+
     const newClip = {
       id: Date.now(),
-      name: file.name,
+      name: `${captureType === CAPTURE_TYPES.SCREEN ? 'Screen' : 'Webcam'} Recording ${new Date().toLocaleTimeString()}`,
       file: file,
       url: URL.createObjectURL(file),
       duration: 0,
       startTime: 0,
       endTime: 0,
-      position: 0, // Don't auto-position on timeline
-      track: -1, // -1 means not on timeline
-      type: captureType, // Track the capture type
-      onTimeline: false // Track if it's on timeline
+      position: 0,
+      track: -1,
+      type: clipType,
+      onTimeline: false
     };
 
-    // Get video duration
+    // Get video duration with error handling
     const video = document.createElement('video');
     video.src = newClip.url;
+    
     video.onloadedmetadata = () => {
       newClip.duration = video.duration;
       newClip.endTime = video.duration;
       setClips(prev => [...prev, newClip]);
     };
-  };
+    
+    video.onerror = () => {
+      console.error('Error loading captured video metadata');
+      URL.revokeObjectURL(newClip.url);
+    };
+  }, [captureType]);
 
   // Handle screen capture click
-  const handleScreenCaptureClick = () => {
-    setCaptureType('screen');
+  const handleScreenCaptureClick = useCallback(() => {
+    setCaptureType(CAPTURE_TYPES.SCREEN);
     setShowMediaCapture(true);
-  };
+  }, []);
 
   // Handle webcam click
-  const handleWebcamClick = () => {
-    setCaptureType('webcam');
+  const handleWebcamClick = useCallback(() => {
+    setCaptureType(CAPTURE_TYPES.WEBCAM);
     setShowMediaCapture(true);
-  };
+  }, []);
 
   // Handle drag and drop
   const handleDrop = (e) => {

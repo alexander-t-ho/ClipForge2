@@ -1,5 +1,21 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
+// Constants
+const TIMELINE_CONFIG = {
+  PIXELS_PER_SECOND: 30,
+  TRACK_HEIGHT: 45,
+  TRACK_SPACING: 5,
+  MIN_CLIP_DURATION: 0.1,
+  SNAP_THRESHOLD: 0.3,
+  GRID_SIZE: 1
+};
+
+const TRACKS = [
+  { id: 0, name: 'Main Video', type: 'video', color: '#007AFF' },
+  { id: 1, name: 'Overlay/PiP', type: 'overlay', color: '#34C759' },
+  { id: 2, name: 'Audio', type: 'audio', color: '#FF9500' }
+];
+
 const Timeline = ({ 
   clips, 
   currentTime, 
@@ -26,16 +42,9 @@ const Timeline = ({
   const [snapToClips, setSnapToClips] = useState(true);
   const [scrollPosition, setScrollPosition] = useState(0);
 
-  const pixelsPerSecond = 30 * zoom; // Reduced from 50 for more compact timeline
-  const trackHeight = 45; // Reduced from 60 for more compact layout
-  const trackSpacing = 5; // Reduced spacing
-
-  // Define tracks
-  const tracks = [
-    { id: 0, name: 'Main Video', type: 'video' },
-    { id: 1, name: 'Overlay/PiP', type: 'overlay' },
-    { id: 2, name: 'Audio', type: 'audio' }
-  ];
+  const pixelsPerSecond = TIMELINE_CONFIG.PIXELS_PER_SECOND * zoom;
+  const trackHeight = TIMELINE_CONFIG.TRACK_HEIGHT;
+  const trackSpacing = TIMELINE_CONFIG.TRACK_SPACING;
 
   // Find next available position for a clip on a specific track
   const findNextAvailablePosition = useCallback((trackId, clipDuration) => {
@@ -126,7 +135,7 @@ const Timeline = ({
     const trackClips = clips.filter(clip => clip.track === (clips.find(c => c.id === excludeClipId)?.track || 0));
 
     if (snapToGrid) {
-      const gridSize = 1; // 1 second grid
+      const gridSize = TIMELINE_CONFIG.GRID_SIZE;
       const gridPosition = Math.round(position / gridSize) * gridSize;
       if (Math.abs(position - gridPosition) < 0.2) {
         snappedPosition = gridPosition;
@@ -135,7 +144,7 @@ const Timeline = ({
 
     if (snapToClips) {
       // Find the closest clip edge to snap to
-      const snapThreshold = 0.3; // seconds
+      const snapThreshold = TIMELINE_CONFIG.SNAP_THRESHOLD;
       let closestSnap = null;
       let closestDistance = Infinity;
 
@@ -260,11 +269,11 @@ const Timeline = ({
               );
               return { 
                 ...clip, 
-                startTime: Math.min(newStartTime, clip.endTime - 0.1) // Ensure minimum 0.1s duration
+                startTime: Math.min(newStartTime, clip.endTime - TIMELINE_CONFIG.MIN_CLIP_DURATION)
               };
             } else if (trimHandle.handle === 'end') {
               const newEndTime = snapToPosition(
-                Math.max(clip.startTime + 0.1, clip.endTime + deltaTime), 
+                Math.max(clip.startTime + TIMELINE_CONFIG.MIN_CLIP_DURATION, clip.endTime + deltaTime), 
                 clip.id, 
                 0
               );
@@ -431,7 +440,7 @@ const Timeline = ({
         </div>
         
         <div className="timeline-tracks" style={{ width: timelineWidth }}>
-          {tracks.map(track => (
+          {TRACKS.map(track => (
             <div key={track.id} className="timeline-track" style={{ height: trackHeight }}>
               <div 
                 className="timeline-track-label"
