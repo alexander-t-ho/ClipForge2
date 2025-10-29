@@ -204,7 +204,8 @@ const Timeline = ({
         });
         
         if (overlappingClip) {
-          // Swap positions: place dragged clip where the other clip was, and vice versa
+          // When videos overlay each other, they switch positions
+          // Dragged clip goes to other clip's position, other clip goes to dragged clip's original position
           const otherClipDuration = overlappingClip.endTime - overlappingClip.startTime;
           
           return prev.map(clip => {
