@@ -169,9 +169,14 @@ const Timeline = ({
     e.preventDefault();
     setIsDragging(true);
     
-    // Store initial clip state
-    let draggedClip = null;
-    let draggedClipTrack = null;
+    // Get original clip state from current clips prop (captured at drag start)
+    const originalClip = clips.find(clip => clip.id === clipId);
+    if (!originalClip) return;
+    
+    const originalStartTime = originalClip.startTime;
+    const originalEndTime = originalClip.endTime;
+    const originalDuration = originalEndTime - originalStartTime;
+    const originalTrack = originalClip.track;
     
     const handleMouseMove = (moveEvent) => {
       if (!timelineRef.current) return;
@@ -216,14 +221,14 @@ const Timeline = ({
               return {
                 ...clip,
                 startTime: overlappingClip.startTime,
-                endTime: overlappingClip.startTime + dragDuration
+                endTime: overlappingClip.startTime + originalDuration
               };
             } else if (clip.id === overlappingClip.id) {
               // Move other clip to the dragged clip's original position
               return {
                 ...clip,
-                startTime: draggedClip.startTime,
-                endTime: draggedClip.startTime + otherClipDuration
+                startTime: originalStartTime,
+                endTime: originalStartTime + otherClipDuration
               };
             }
             return clip;
@@ -241,15 +246,13 @@ const Timeline = ({
 
     const handleMouseUp = () => {
       setIsDragging(false);
-      draggedClip = null;
-      draggedClipTrack = null;
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-  }, [pixelsPerSecond, snapToPosition, onClipUpdate]);
+  }, [pixelsPerSecond, snapToPosition, onClipUpdate, clips]);
 
   // Handle trim
   const handleTrim = useCallback((clipId, handle, e) => {
