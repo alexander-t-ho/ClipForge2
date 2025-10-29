@@ -57,14 +57,32 @@ function App() {
     const newClip = createClip(file, CLIP_TYPES.IMPORTED);
     const video = document.createElement('video');
     video.src = newClip.url;
+    video.preload = 'metadata';
     
     video.onloadedmetadata = () => {
-      newClip.duration = video.duration;
-      newClip.endTime = video.duration;
-      setClips(prev => [...prev, newClip]);
+      console.log('Video metadata loaded:', {
+        duration: video.duration,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight
+      });
+      
+      if (video.duration && !isNaN(video.duration) && isFinite(video.duration)) {
+        newClip.duration = video.duration;
+        newClip.endTime = video.duration;
+        setClips(prev => [...prev, newClip]);
+      } else {
+        console.warn('Invalid video duration:', video.duration);
+        // Still add the clip but with a default duration
+        newClip.duration = 10; // Default 10 seconds
+        newClip.endTime = 10;
+        setClips(prev => [...prev, newClip]);
+      }
     };
     
-    video.onerror = () => URL.revokeObjectURL(newClip.url);
+    video.onerror = (error) => {
+      console.error('Video load error:', error);
+      URL.revokeObjectURL(newClip.url);
+    };
   }, [createClip]);
 
   // Handle media capture
@@ -77,14 +95,32 @@ function App() {
     const newClip = createClip(file, clipType, name);
     const video = document.createElement('video');
     video.src = newClip.url;
+    video.preload = 'metadata';
     
     video.onloadedmetadata = () => {
-      newClip.duration = video.duration;
-      newClip.endTime = video.duration;
-      setClips(prev => [...prev, newClip]);
+      console.log('Captured video metadata loaded:', {
+        duration: video.duration,
+        videoWidth: video.videoWidth,
+        videoHeight: video.videoHeight
+      });
+      
+      if (video.duration && !isNaN(video.duration) && isFinite(video.duration)) {
+        newClip.duration = video.duration;
+        newClip.endTime = video.duration;
+        setClips(prev => [...prev, newClip]);
+      } else {
+        console.warn('Invalid captured video duration:', video.duration);
+        // Still add the clip but with a default duration
+        newClip.duration = 10; // Default 10 seconds
+        newClip.endTime = 10;
+        setClips(prev => [...prev, newClip]);
+      }
     };
     
-    video.onerror = () => URL.revokeObjectURL(newClip.url);
+    video.onerror = (error) => {
+      console.error('Captured video load error:', error);
+      URL.revokeObjectURL(newClip.url);
+    };
   }, [createClip, captureType]);
 
   // Load test video on startup
