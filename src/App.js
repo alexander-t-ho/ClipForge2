@@ -256,9 +256,26 @@ function App() {
       let actualStartTime;
 
       // When clicking "Add to Timeline" button (startTime is 0 or undefined)
-      // Place the clip at the current cursor position
+      // Place clips sequentially - after the last clip on the timeline
       if (startTime === 0 || startTime === undefined) {
-        actualStartTime = Math.max(0, currentTime); // Use current cursor position, but never before 0:00
+        // Find all clips already on the timeline
+        const timelineClips = prev.filter(c => c.onTimeline);
+        
+        if (timelineClips.length === 0) {
+          // No clips yet, start at 0:00
+          actualStartTime = 0;
+        } else {
+          // Find the clip that ends latest (last clip)
+          const lastClip = timelineClips.reduce((latest, clip) => {
+            if (!latest || (clip.endTime && clip.endTime > (latest.endTime || 0))) {
+              return clip;
+            }
+            return latest;
+          }, null);
+          
+          // Place the new clip after the last clip ends
+          actualStartTime = lastClip?.endTime || 0;
+        }
       } else {
         // When dragging to timeline, use the drop position
         actualStartTime = Math.max(0, startTime); // Never before 0:00
