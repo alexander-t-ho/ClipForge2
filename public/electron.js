@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, desktopCapturer, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, dialog, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
@@ -32,6 +32,7 @@ const isDev = process.env.NODE_ENV === 'development' || process.env.npm_lifecycl
 
 let mainWindow;
 let recordingControlWindow = null;
+let recordingOverlayWindow = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -173,6 +174,82 @@ function createRecordingControlWindow() {
   return recordingControlWindow;
 }
 
+function createRecordingOverlayWindow(displayId) {
+  // Close existing overlay if it exists
+  if (recordingOverlayWindow) {
+    recordingOverlayWindow.close();
+    recordingOverlayWindow = null;
+  }
+
+  // Get all displays
+  const displays = screen.getAllDisplays();
+  
+  // Find the display by ID or use primary display
+  let targetDisplay = displays[0];
+  if (displayId) {
+    const foundDisplay = displays.find(d => d.id === displayId);
+    if (foundDisplay) {
+      targetDisplay = foundDisplay;
+    }
+  }
+
+  const { x, y, width, height } = targetDisplay.bounds;
+
+  // Create a transparent overlay window with just a red border
+  recordingOverlayWindow = new BrowserWindow({
+    x,
+    y,
+    width,
+    height,
+    frame: false,
+    transparent: true,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    movable: false,
+    focusable: false,
+    clickThrough: true, // Allow clicks to pass through
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true
+    }
+  });
+
+  // Create HTML content for red border overlay
+  const overlayHTML = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        body {
+          width: 100vw;
+          height: 100vh;
+          background: transparent;
+          border: 4px solid #ff0000;
+          box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+          pointer-events: none;
+        }
+      </style>
+    </head>
+    <body></body>
+    </html>
+  `;
+
+  recordingOverlayWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(overlayHTML)}`);
+  recordingOverlayWindow.show();
+
+  recordingOverlayWindow.on('closed', () => {
+    recordingOverlayWindow = null;
+  });
+
+  return recordingOverlayWindow;
+}
+
 // Global error handling to prevent popups
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
@@ -234,6 +311,25 @@ ipcMain.handle('close-recording-control', () => {
   if (recordingControlWindow) {
     recordingControlWindow.close();
     recordingControlWindow = null;
+  }
+  return true;
+});
+
+// Recording overlay window handlers
+ipcMain.handle('show-recording-overlay', (event, displayId) => {
+  try {
+    createRecordingOverlayWindow(displayId);
+    return true;
+  } catch (error) {
+    console.error('Error creating recording overlay:', error);
+    return false;
+  }
+});
+
+ipcMain.handle('close-recording-overlay', () => {
+  if (recordingOverlayWindow) {
+    recordingOverlayWindow.close();
+    recordingOverlayWindow = null;
   }
   return true;
 });

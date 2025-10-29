@@ -46,6 +46,8 @@ const MediaCapture = ({ captureType: propCaptureType, onCapture, onClose }) => {
       }
       // Close recording control window if open
       window.electronAPI.closeRecordingControl();
+      // Close recording overlay if open
+      window.electronAPI.closeRecordingOverlay();
     };
   }, []);
 
@@ -376,6 +378,9 @@ const MediaCapture = ({ captureType: propCaptureType, onCapture, onClose }) => {
         // Close the floating window
         window.electronAPI.closeRecordingControl();
 
+        // Close the red outline overlay
+        window.electronAPI.closeRecordingOverlay();
+
         // Add the captured video to the library and close modal
         setTimeout(() => {
           onCapture(file);
@@ -404,6 +409,23 @@ const MediaCapture = ({ captureType: propCaptureType, onCapture, onClose }) => {
 
       // Show floating recording control window
       await window.electronAPI.showRecordingControl();
+
+      // Show red outline overlay on the screen being recorded
+      if (captureType === 'screen' && selectedSource?.display_id) {
+        try {
+          await window.electronAPI.showRecordingOverlay(selectedSource.display_id);
+        } catch (error) {
+          console.warn('Could not show recording overlay:', error);
+          // Continue recording even if overlay fails
+        }
+      } else if (captureType === 'screen') {
+        // If no display_id, show overlay on primary display
+        try {
+          await window.electronAPI.showRecordingOverlay(null);
+        } catch (error) {
+          console.warn('Could not show recording overlay:', error);
+        }
+      }
 
       // Modal will hide automatically due to isRecording state change
       // Recording continues in the background
@@ -439,6 +461,9 @@ const MediaCapture = ({ captureType: propCaptureType, onCapture, onClose }) => {
 
     // Close the floating control window
     window.electronAPI.closeRecordingControl();
+
+    // Close the red outline overlay
+    window.electronAPI.closeRecordingOverlay();
 
     setIsRecording(false);
   };

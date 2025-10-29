@@ -7,6 +7,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Recording control window
   showRecordingControl: () => ipcRenderer.invoke('show-recording-control'),
   closeRecordingControl: () => ipcRenderer.invoke('close-recording-control'),
+  
+  // Recording overlay window
+  showRecordingOverlay: (displayId) => ipcRenderer.invoke('show-recording-overlay', displayId),
+  closeRecordingOverlay: () => ipcRenderer.invoke('close-recording-overlay'),
   sendRecordingControlAction: (action) => ipcRenderer.send('recording-control-action', action),
   onRecordingControlAction: (callback) => {
     ipcRenderer.on('recording-control-action', (event, action) => callback(action));
