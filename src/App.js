@@ -81,7 +81,21 @@ function App() {
     
     video.onerror = (error) => {
       console.error('Video load error:', error);
+      console.error('Video src:', video.src);
+      console.error('Video error details:', {
+        code: video.error?.code,
+        message: video.error?.message,
+        networkState: video.networkState,
+        readyState: video.readyState
+      });
+      
+      // Clean up the invalid URL
       URL.revokeObjectURL(newClip.url);
+      
+      // Still add the clip with default values so user knows there was an issue
+      newClip.duration = 10;
+      newClip.endTime = 10;
+      setClips(prev => [...prev, newClip]);
     };
   }, [createClip]);
 
@@ -119,7 +133,21 @@ function App() {
     
     video.onerror = (error) => {
       console.error('Captured video load error:', error);
+      console.error('Captured video src:', video.src);
+      console.error('Captured video error details:', {
+        code: video.error?.code,
+        message: video.error?.message,
+        networkState: video.networkState,
+        readyState: video.readyState
+      });
+      
+      // Clean up the invalid URL
       URL.revokeObjectURL(newClip.url);
+      
+      // Still add the clip with default values
+      newClip.duration = 10;
+      newClip.endTime = 10;
+      setClips(prev => [...prev, newClip]);
     };
   }, [createClip, captureType]);
 
@@ -159,30 +187,42 @@ function App() {
 
   // Timeline functions
   const addClipToTimeline = useCallback((clipId, trackId, startTime) => {
-    setClips(prev => prev.map(clip => {
-      if (clip.id === clipId) {
-        // Calculate duration: use clip.duration, or calculate from endTime - startTime if duration not set
-        let duration = clip.duration;
-        if (!duration || duration === 0) {
-          // Try to calculate from endTime if available
-          if (clip.endTime && clip.startTime !== undefined) {
-            duration = clip.endTime - clip.startTime;
-          } else {
-            // Fallback: try to get from video element
-            duration = 10; // Default fallback
-          }
-        }
-        return { 
-          ...clip, 
-          onTimeline: true, 
-          track: trackId, 
-          startTime, 
-          endTime: startTime + duration, // Set endTime based on startTime + duration
-          position: startTime 
-        };
+    setClips(prev => {
+      // Find the clip to add
+      const clipToAdd = prev.find(clip => clip.id === clipId);
+      if (!clipToAdd) return prev;
+
+      // Calculate duration
+      let duration = clipToAdd.duration;
+      if (!duration || duration === 0) {
+        duration = 10; // Default fallback
       }
-      return clip;
-    }));
+
+      // If startTime is 0, find the end of the last clip on the same track
+      let actualStartTime = startTime;
+      if (startTime === 0) {
+        const clipsOnTrack = prev.filter(clip => clip.onTimeline && clip.track === trackId);
+        if (clipsOnTrack.length > 0) {
+          // Find the latest end time on this track
+          const latestEndTime = Math.max(...clipsOnTrack.map(clip => clip.endTime || 0));
+          actualStartTime = latestEndTime;
+        }
+      }
+
+      return prev.map(clip => {
+        if (clip.id === clipId) {
+          return { 
+            ...clip, 
+            onTimeline: true, 
+            track: trackId, 
+            startTime: actualStartTime, 
+            endTime: actualStartTime + duration,
+            position: actualStartTime 
+          };
+        }
+        return clip;
+      });
+    });
   }, []);
 
   const removeClipFromTimeline = useCallback((clipId) => {
@@ -363,6 +403,62 @@ function App() {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [selectedClip, currentTime, deleteClip, splitClip]);
+
+  // Find the current clip based on timeline position
+  const getCurrentClip = useCallback(() => {
+    const timelineClips = clips.filter(clip => clip.onTimeline);
+    return timelineClips.find(clip => 
+      currentTime >= clip.startTime && currentTime < clip.endTime
+    );
+  }, [clips, currentTime]);
+
+  // Update video source when current clip changes
+  useEffect(() => {
+    const currentClip = getCurrentClip();
+    if (currentClip && videoRef.current) {
+      videoRef.current.src = currentClip.url;
+      videoRef.current.load();
+      
+      // Set the video time to the relative position within the clip
+      const relativeTime = currentTime - currentClip.startTime;
+      if (relativeTime >= 0 && relativeTime <= currentClip.duration) {
+        videoRef.current.currentTime = relativeTime;
+      }
+    }
+  }, [getCurrentClip, currentTime]);
+
+  // Handle video events
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleEnded = () => {
+      // When a clip ends, move to the next clip or stop
+      const currentClip = getCurrentClip();
+      if (currentClip) {
+        // Move to the end of the current clip
+        setCurrentTime(currentClip.endTime);
+        setIsPlaying(false);
+      }
+    };
+
+    const handleTimeUpdate = () => {
+      // Update timeline position based on video playback
+      const currentClip = getCurrentClip();
+      if (currentClip && isPlaying) {
+        const newTime = currentClip.startTime + video.currentTime;
+        setCurrentTime(newTime);
+      }
+    };
+
+    video.addEventListener('ended', handleEnded);
+    video.addEventListener('timeupdate', handleTimeUpdate);
+
+    return () => {
+      video.removeEventListener('ended', handleEnded);
+      video.removeEventListener('timeupdate', handleTimeUpdate);
+    };
+  }, [getCurrentClip, isPlaying]);
 
   // Playback control
   const handlePlayPause = useCallback(() => {
@@ -552,10 +648,17 @@ function App() {
                     <button 
                       className="play-button"
                       onClick={() => {
-                        if (videoRef.current) {
+                        const currentClip = getCurrentClip();
+                        if (videoRef.current && currentClip) {
                           if (isPlaying) {
                             videoRef.current.pause();
                           } else {
+                            // Set the correct video source and time before playing
+                            videoRef.current.src = currentClip.url;
+                            const relativeTime = currentTime - currentClip.startTime;
+                            if (relativeTime >= 0 && relativeTime <= currentClip.duration) {
+                              videoRef.current.currentTime = relativeTime;
+                            }
                             videoRef.current.play();
                           }
                         }
@@ -592,10 +695,17 @@ function App() {
         onDragFromSidebar={handleDragFromSidebar}
         isPlaying={isPlaying}
         onPlayPause={() => {
-          if (videoRef.current) {
+          const currentClip = getCurrentClip();
+          if (videoRef.current && currentClip) {
             if (isPlaying) {
               videoRef.current.pause();
             } else {
+              // Set the correct video source and time before playing
+              videoRef.current.src = currentClip.url;
+              const relativeTime = currentTime - currentClip.startTime;
+              if (relativeTime >= 0 && relativeTime <= currentClip.duration) {
+                videoRef.current.currentTime = relativeTime;
+              }
               videoRef.current.play();
             }
           }
