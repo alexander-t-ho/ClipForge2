@@ -67,8 +67,7 @@ const Timeline = ({
     const markers = [];
     // Timeline duration is the maximum endTime of all clips on the timeline
     // Use exact duration, or minimum 60 seconds if no clips
-    const maxClipTime = clips.length > 0 ? Math.max(...clips.map(clip => clip.endTime || 0)) : 0;
-    const maxTime = Math.max(60, maxClipTime);
+    const maxTime = Math.max(60, totalDuration);
     const interval = CONFIG.TIMELINE_SCALE_INTERVAL;
 
     for (let time = 0; time <= maxTime; time += interval) {
@@ -79,7 +78,7 @@ const Timeline = ({
     }
 
     return markers;
-  }, [clips, pixelsPerSecond]);
+  }, [totalDuration, pixelsPerSecond]);
 
   const timelineMarkers = getTimelineMarkers();
 
