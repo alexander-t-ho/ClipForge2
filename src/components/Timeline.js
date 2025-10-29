@@ -187,22 +187,14 @@ const Timeline = ({
       const snappedTime = snapToPosition(newTime, clipId);
       
       onClipUpdate(prev => {
-        // Get the dragged clip
-        if (!draggedClip) {
-          draggedClip = prev.find(clip => clip.id === clipId);
-          draggedClipTrack = draggedClip?.track;
-        }
-        if (!draggedClip) return prev;
-        
-        const dragDuration = draggedClip.endTime - draggedClip.startTime;
         const newStartTime = snappedTime;
-        const newEndTime = newStartTime + dragDuration;
+        const newEndTime = newStartTime + originalDuration;
         
         // Find clips on the same track that would overlap
         const otherClips = prev.filter(clip => 
           clip.id !== clipId && 
           clip.onTimeline && 
-          clip.track === draggedClipTrack
+          clip.track === originalTrack
         );
         
         // Check for overlap with any other clip
