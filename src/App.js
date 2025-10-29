@@ -615,6 +615,8 @@ function App() {
 
         // Check if we've reached the end of the current clip
         if (newTime >= currentClip.endTime) {
+          // Ensure cursor is exactly at the end of the clip
+          setCurrentTime(currentClip.endTime);
           // Trigger move to next clip
           handleEnded();
         } else {
@@ -930,7 +932,9 @@ function App() {
                     const currentClip = getCurrentClip();
                     if (currentClip) {
                       const newTime = currentClip.startTime + e.target.currentTime;
-                      setCurrentTime(newTime);
+                      // Clamp to the clip's end time to ensure cursor doesn't go past the clip end
+                      const clampedTime = Math.min(newTime, currentClip.endTime);
+                      setCurrentTime(clampedTime);
                     }
                   }}
                   onPlay={() => setIsPlaying(true)}
@@ -940,11 +944,14 @@ function App() {
                     if (currentClip) {
                       const nextClip = clips.filter(clip => clip.onTimeline).find(clip => clip.startTime >= currentClip.endTime);
                       if (nextClip) {
+                        // Move to next clip
                         setCurrentTime(nextClip.startTime);
                         videoRef.current.src = nextClip.url;
                         videoRef.current.currentTime = 0;
                         videoRef.current.play();
                       } else {
+                        // No next clip - position cursor exactly at the end of this clip
+                        setCurrentTime(currentClip.endTime);
                         setIsPlaying(false);
                       }
                     }
