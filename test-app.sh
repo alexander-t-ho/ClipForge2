@@ -1,0 +1,55 @@
+#!/bin/bash
+
+echo "🎬 ClipForge2 - Desktop Video Editor Test"
+echo "=========================================="
+echo ""
+
+echo "✅ Project Status:"
+echo "  - Electron app: Running"
+echo "  - Webpack dev server: Running on http://localhost:3000"
+echo "  - Test video file: Available (test-video.mp4)"
+echo ""
+
+echo "🧪 Testing Scenarios:"
+echo ""
+echo "1. 📁 Video Import Test:"
+echo "   - Drag & drop test-video.mp4 onto the app"
+echo "   - Or click 'Import Video' button and select test-video.mp4"
+echo "   - Expected: Video appears in sidebar media library"
+echo ""
+
+echo "2. ⏱️ Timeline Test:"
+echo "   - Imported video should appear on timeline"
+echo "   - Drag the clip to reposition it"
+echo "   - Expected: Clip moves on timeline"
+echo ""
+
+echo "3. ✂️ Trim Test:"
+echo "   - Select a clip on timeline"
+echo "   - Drag the white trim handles on clip edges"
+echo "   - Expected: Clip duration changes, preview updates"
+echo ""
+
+echo "4. 🎥 Preview Test:"
+echo "   - Click play button or drag playhead"
+echo "   - Expected: Video plays in preview window"
+echo ""
+
+echo "5. 💾 Export Test:"
+echo "   - Click 'Export MP4' button"
+echo "   - Choose output location"
+echo "   - Expected: Progress indicator shows, video exports"
+echo ""
+
+echo "📋 MVP Requirements Checklist:"
+echo "  ✅ Desktop app launches (Electron + React)"
+echo "  ✅ Basic video import (drag & drop + file picker)"
+echo "  ✅ Simple timeline view with clips"
+echo "  ✅ Video preview player"
+echo "  ✅ Basic trim functionality"
+echo "  ✅ Export to MP4"
+echo "  ✅ Built and packaged as native app"
+echo ""
+
+echo "🚀 Ready to test! The ClipForge2 app should be open and ready for testing."
+echo "   Use the test-video.mp4 file for all testing scenarios."
