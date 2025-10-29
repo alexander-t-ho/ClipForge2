@@ -7,7 +7,7 @@ const CONFIG = {
   MIN_CLIP_DURATION: 0.1,
   SNAP_THRESHOLD: 0.3,
   CURSOR_OFFSET: 200, // 200px offset for cursor position (more space on left)
-  VIDEO_START_OFFSET: 0, // Videos start at cursor position
+  VIDEO_START_OFFSET: 200, // Videos start at same offset as cursor so they align
   TIMELINE_SCALE_INTERVAL: 10 // 10 second intervals (matches reference)
 };
 
