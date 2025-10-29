@@ -6,7 +6,8 @@ const CONFIG = {
   TRACK_HEIGHT: 80,
   MIN_CLIP_DURATION: 0.1,
   SNAP_THRESHOLD: 0.3,
-  CURSOR_OFFSET: 50, // 50px offset for cursor and 0:00 start
+  CURSOR_OFFSET: 100, // 100px offset for cursor position
+  VIDEO_START_OFFSET: 50, // 50px offset for video start (50px to the left of cursor)
   TIMELINE_SCALE_INTERVAL: 30 // 30 second intervals
 };
 
@@ -390,7 +391,7 @@ const Timeline = ({
                           <div 
                             className="clip-spacing"
                             style={{ 
-                              left: CONFIG.CURSOR_OFFSET + prevClip.endTime * pixelsPerSecond,
+                              left: CONFIG.VIDEO_START_OFFSET + prevClip.endTime * pixelsPerSecond,
                               width: spacing
                             }}
                           />
@@ -399,7 +400,7 @@ const Timeline = ({
                         <div
                           className={`timeline-clip ${selectedClip?.id === clip.id ? 'selected' : ''}`}
                           style={{
-                            left: CONFIG.CURSOR_OFFSET + clip.startTime * pixelsPerSecond,
+                            left: CONFIG.VIDEO_START_OFFSET + clip.startTime * pixelsPerSecond,
                             width: (clip.endTime - clip.startTime) * pixelsPerSecond,
                             backgroundColor: track.color
                           }}
@@ -459,7 +460,7 @@ const Timeline = ({
               <div 
                 className="clipping-window"
                 style={{
-                  left: CONFIG.CURSOR_OFFSET + Math.min(clippingStartTime, clippingEndTime) * pixelsPerSecond,
+                  left: CONFIG.VIDEO_START_OFFSET + Math.min(clippingStartTime, clippingEndTime) * pixelsPerSecond,
                   width: Math.abs(clippingEndTime - clippingStartTime) * pixelsPerSecond,
                   height: TRACKS.length * CONFIG.TRACK_HEIGHT
                 }}

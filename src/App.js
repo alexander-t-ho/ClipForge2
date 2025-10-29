@@ -573,7 +573,6 @@ function App() {
 
   // Playback control
   const handlePlayPause = useCallback(() => {
-    const currentClip = getCurrentClip();
     const video = videoRef.current;
     
     if (!video) {
@@ -587,6 +586,7 @@ function App() {
       setIsPlaying(false);
     } else {
       // Play
+      const currentClip = getCurrentClip();
       if (currentClip) {
         // Set the correct video source and time before playing
         if (video.src !== currentClip.url) {
@@ -796,14 +796,33 @@ function App() {
             <div className="video-container">
               {selectedClip ? (
                 <div className="custom-video-player">
-                  <video 
-            ref={videoRef}
+                  <video
+                    ref={videoRef}
                     className="preview-video"
                     src={selectedClip.url}
-                    onTimeUpdate={(e) => setCurrentTime(e.target.currentTime)}
+                    onTimeUpdate={(e) => {
+                      const currentClip = getCurrentClip();
+                      if (currentClip) {
+                        const newTime = currentClip.startTime + e.target.currentTime;
+                        setCurrentTime(newTime);
+                      }
+                    }}
                     onPlay={() => setIsPlaying(true)}
                     onPause={() => setIsPlaying(false)}
-                    onEnded={() => setIsPlaying(false)}
+                    onEnded={() => {
+                      const currentClip = getCurrentClip();
+                      if (currentClip) {
+                        const nextClip = clips.filter(clip => clip.onTimeline).find(clip => clip.startTime >= currentClip.endTime);
+                        if (nextClip) {
+                          setCurrentTime(nextClip.startTime);
+                          videoRef.current.src = nextClip.url;
+                          videoRef.current.currentTime = 0;
+                          videoRef.current.play();
+                        } else {
+                          setIsPlaying(false);
+                        }
+                      }
+                    }}
                   />
                   <div className="video-overlay">
                     <button 
