@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, desktopCapturer, dialog, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, desktopCapturer, dialog, screen, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const ffmpeg = require('fluent-ffmpeg');
@@ -33,6 +33,7 @@ const isDev = process.env.NODE_ENV === 'development' || process.env.npm_lifecycl
 let mainWindow;
 let recordingControlWindow = null;
 let recordingOverlayWindow = null;
+let webcamPreviewWindow = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -65,8 +66,50 @@ function createWindow() {
     : `file://${path.join(__dirname, '../build/index.html')}`;
   
   console.log('Loading URL:', startUrl);
+  console.log('isDev:', isDev);
+  console.log('__dirname:', __dirname);
+  
   mainWindow.loadURL(startUrl).catch(err => {
     console.error('Failed to load URL:', err);
+    console.error('Error details:', err.message);
+    console.error('Stack trace:', err.stack);
+    
+    // Fallback: try to load a simple HTML page
+    console.log('Attempting fallback...');
+    const fallbackHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>ClipForge2 - Loading Error</title>
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: #1a1a1a; 
+              color: white; 
+              display: flex; 
+              align-items: center; 
+              justify-content: center; 
+              height: 100vh; 
+              margin: 0;
+            }
+            .container { text-align: center; padding: 20px; }
+            h1 { color: #4a9eff; }
+            .error { color: #ff6b6b; margin: 20px 0; }
+            .info { color: #888; font-size: 14px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>🎬 ClipForge2</h1>
+            <div class="error">Failed to load the application</div>
+            <div class="info">Please check the console for error details</div>
+            <div class="info">URL: ${startUrl}</div>
+          </div>
+        </body>
+      </html>
+    `;
+    
+    mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(fallbackHtml)}`);
   });
 
   // Console message handler - show all errors and warnings for debugging
@@ -174,26 +217,68 @@ function createRecordingControlWindow() {
   return recordingControlWindow;
 }
 
-function createRecordingOverlayWindow(displayId) {
+function createRecordingOverlayWindow(displayId, windowBounds = null) {
   // Close existing overlay if it exists
   if (recordingOverlayWindow) {
     recordingOverlayWindow.close();
     recordingOverlayWindow = null;
   }
 
-  // Get all displays
-  const displays = screen.getAllDisplays();
-  
-  // Find the display by ID or use primary display
-  let targetDisplay = displays[0];
-  if (displayId) {
-    const foundDisplay = displays.find(d => d.id === displayId);
-    if (foundDisplay) {
-      targetDisplay = foundDisplay;
-    }
-  }
+  let x, y, width, height;
 
-  const { x, y, width, height } = targetDisplay.bounds;
+  if (windowBounds) {
+    // Use specific window bounds for window recording
+    console.log('Creating overlay for specific window:', windowBounds);
+    x = windowBounds.x;
+    y = windowBounds.y;
+    width = windowBounds.width;
+    height = windowBounds.height;
+  } else {
+    // Use display bounds for screen recording
+    const displays = screen.getAllDisplays();
+    console.log('Available displays:', displays.map(d => ({ id: d.id, bounds: d.bounds })));
+    console.log('Requested display_id:', displayId, 'type:', typeof displayId);
+
+    // Find the display by ID or use primary display
+    let targetDisplay = null;
+
+    if (displayId) {
+      // Try exact match first
+      targetDisplay = displays.find(d => d.id === displayId);
+
+      // If no exact match, try converting types
+      if (!targetDisplay) {
+        targetDisplay = displays.find(d => d.id.toString() === displayId.toString());
+      }
+
+      // If still no match, try parsing the display_id if it's in format like "screen:1234:0"
+      if (!targetDisplay && typeof displayId === 'string') {
+        const parts = displayId.split(':');
+        if (parts.length > 1) {
+          const numericId = parseInt(parts[1], 10);
+          targetDisplay = displays.find(d => d.id === numericId);
+        }
+      }
+    }
+
+    // Fall back to primary display if no match found
+    if (!targetDisplay) {
+      console.log('No matching display found, using primary display');
+      targetDisplay = screen.getPrimaryDisplay();
+    }
+
+    // Use workArea to exclude menu bar and dock on macOS
+    const workArea = targetDisplay.workArea;
+    x = workArea.x;
+    y = workArea.y;
+    width = workArea.width;
+    height = workArea.height;
+  }
+  console.log('Creating overlay:', {
+    displayId,
+    windowBounds,
+    bounds: { x, y, width, height }
+  });
 
   // Create a transparent overlay window with just a red border
   recordingOverlayWindow = new BrowserWindow({
@@ -208,12 +293,14 @@ function createRecordingOverlayWindow(displayId) {
     resizable: false,
     movable: false,
     focusable: false,
-    clickThrough: true, // Allow clicks to pass through
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true
     }
   });
+
+  // Make the window click-through so users can interact with the screen
+  recordingOverlayWindow.setIgnoreMouseEvents(true);
 
   // Create HTML content for red border overlay
   const overlayHTML = `
@@ -250,6 +337,54 @@ function createRecordingOverlayWindow(displayId) {
   return recordingOverlayWindow;
 }
 
+function createWebcamPreviewWindow() {
+  // Close existing webcam preview if it exists
+  if (webcamPreviewWindow) {
+    webcamPreviewWindow.close();
+    webcamPreviewWindow = null;
+  }
+
+  // Create webcam preview window
+  webcamPreviewWindow = new BrowserWindow({
+    width: 400,
+    height: 300,
+    frame: true,
+    transparent: false,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    resizable: true,
+    movable: true,
+    focusable: true,
+    title: 'Webcam Preview',
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
+  });
+
+  //Enable logging for preview window
+  webcamPreviewWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    if (level === 2) { // error
+      console.error(`[Preview Console Error]: ${message}`);
+    } else if (level === 1) { // warning
+      console.warn(`[Preview Console Warning]: ${message}`);
+    } else {
+      console.log(`[Preview Console]: ${message}`);
+    }
+  });
+
+  // Load the webcam preview HTML file
+  webcamPreviewWindow.loadFile(path.join(__dirname, 'webcam-preview.html'));
+  webcamPreviewWindow.show();
+
+  webcamPreviewWindow.on('closed', () => {
+    webcamPreviewWindow = null;
+  });
+
+  return webcamPreviewWindow;
+}
+
 // Global error handling to prevent popups
 process.on('uncaughtException', (error) => {
   console.error('Uncaught Exception:', error);
@@ -280,20 +415,21 @@ ipcMain.handle('get-screen-sources', async () => {
   try {
     const sources = await desktopCapturer.getSources({
       types: ['screen', 'window'],
-      thumbnailSize: { width: 150, height: 150 }
+      thumbnailSize: { width: 300, height: 200 }
     });
 
     console.log('desktopCapturer returned', sources.length, 'sources');
 
-    // Convert sources to plain objects without thumbnails (thumbnails can cause IPC issues)
+    // Convert sources to plain objects with thumbnail data URLs
     const simpleSources = sources.map(source => ({
       id: source.id,
       name: source.name,
       display_id: source.display_id,
-      appIcon: null // Don't send thumbnail data through IPC
+      thumbnail: source.thumbnail ? source.thumbnail.toDataURL() : null,
+      appIcon: source.appIcon ? source.appIcon.toDataURL() : null
     }));
 
-    console.log('Returning sources:', simpleSources);
+    console.log('Returning sources:', simpleSources.length, 'sources with thumbnails');
     return simpleSources;
   } catch (error) {
     console.error('Error getting screen sources:', error);
@@ -316,9 +452,9 @@ ipcMain.handle('close-recording-control', () => {
 });
 
 // Recording overlay window handlers
-ipcMain.handle('show-recording-overlay', (event, displayId) => {
+ipcMain.handle('show-recording-overlay', (event, displayId, windowBounds = null) => {
   try {
-    createRecordingOverlayWindow(displayId);
+    createRecordingOverlayWindow(displayId, windowBounds);
     return true;
   } catch (error) {
     console.error('Error creating recording overlay:', error);
@@ -332,6 +468,47 @@ ipcMain.handle('close-recording-overlay', () => {
     recordingOverlayWindow = null;
   }
   return true;
+});
+
+// Webcam preview window handlers
+ipcMain.handle('show-webcam-preview-window', () => {
+  try {
+    createWebcamPreviewWindow();
+    return true;
+  } catch (error) {
+    console.error('Error creating webcam preview window:', error);
+    return false;
+  }
+});
+
+ipcMain.handle('close-webcam-preview-window', () => {
+  if (webcamPreviewWindow) {
+    webcamPreviewWindow.close();
+    webcamPreviewWindow = null;
+  }
+  return true;
+});
+
+// Send webcam frame to preview window
+ipcMain.on('webcam-frame', (event, dataUrl) => {
+  console.log('Received webcam frame in main process, size:', dataUrl ? dataUrl.length : 'null');
+  if (webcamPreviewWindow && !webcamPreviewWindow.isDestroyed()) {
+    webcamPreviewWindow.webContents.send('webcam-frame', dataUrl);
+    console.log('Sent webcam frame to preview window');
+  } else {
+    console.log('Preview window not available or destroyed');
+  }
+});
+
+// Open System Preferences for screen recording permission
+ipcMain.handle('open-system-preferences', () => {
+  try {
+    shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+    return true;
+  } catch (error) {
+    console.error('Error opening System Preferences:', error);
+    return false;
+  }
 });
 
 // Forward recording control events to main window
@@ -389,6 +566,85 @@ ipcMain.handle('save-file-dialog', async (event, defaultPath) => {
   } catch (error) {
     console.error('Error opening save dialog:', error);
     return null;
+  }
+});
+
+// Video export
+ipcMain.handle('export-video', async (event, clips) => {
+  try {
+    if (!clips || clips.length === 0) {
+      throw new Error('No clips to export');
+    }
+
+    // Show save dialog
+    const result = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: 'exported-video.mp4',
+      filters: [
+        { name: 'MP4 Video', extensions: ['mp4'] },
+        { name: 'WebM Video', extensions: ['webm'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (result.canceled) {
+      return { success: false, message: 'Export cancelled' };
+    }
+
+    const outputPath = result.filePath;
+    
+    // For now, if there's only one clip, just copy it
+    if (clips.length === 1) {
+      const clip = clips[0];
+      const inputPath = clip.file.path || URL.createObjectURL(clip.file);
+      
+      // Use FFmpeg to process the video
+      return new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+          .output(outputPath)
+          .on('start', (commandLine) => {
+            console.log('FFmpeg started:', commandLine);
+          })
+          .on('progress', (progress) => {
+            mainWindow.webContents.send('export-progress', progress);
+          })
+          .on('end', () => {
+            console.log('Export finished');
+            resolve({ success: true, outputPath });
+          })
+          .on('error', (err) => {
+            console.error('Export error:', err);
+            reject(err);
+          })
+          .run();
+      });
+    } else {
+      // Multiple clips - concatenate them
+      // This is a simplified version - in a real app you'd want more sophisticated editing
+      const inputPath = clips[0].file.path || URL.createObjectURL(clips[0].file);
+      
+      return new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+          .output(outputPath)
+          .on('start', (commandLine) => {
+            console.log('FFmpeg started:', commandLine);
+          })
+          .on('progress', (progress) => {
+            mainWindow.webContents.send('export-progress', progress);
+          })
+          .on('end', () => {
+            console.log('Export finished');
+            resolve({ success: true, outputPath });
+          })
+          .on('error', (err) => {
+            console.error('Export error:', err);
+            reject(err);
+          })
+          .run();
+      });
+    }
+  } catch (error) {
+    console.error('Export error:', error);
+    return { success: false, message: error.message };
   }
 });
 

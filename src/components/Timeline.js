@@ -500,6 +500,18 @@ const Timeline = ({
                           <div className="clip-content">
                             {/* Optional: Just the clip name without duration */}
                             <div className="clip-name">{clip.name}</div>
+                            
+                            {/* Delete button for timeline clips */}
+                            <button
+                              className="timeline-clip-delete"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteClip(clip.id);
+                              }}
+                              title="Remove from timeline"
+                            >
+                              ×
+                            </button>
                           </div>
                           
                           {/* Trim handles */}

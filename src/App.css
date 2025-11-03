@@ -948,6 +948,36 @@ body {
   opacity: 1; 
 }
 
+.timeline-clip-delete {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  background: rgba(255, 0, 0, 0.8);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s, background-color 0.2s;
+  z-index: 10;
+}
+
+.timeline-clip:hover .timeline-clip-delete {
+  opacity: 1;
+}
+
+.timeline-clip-delete:hover {
+  background: rgba(255, 0, 0, 1);
+  transform: scale(1.1);
+}
+
 .trim-start { 
   left: 0; 
 }

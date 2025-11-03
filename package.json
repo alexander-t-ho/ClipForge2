@@ -51,16 +51,33 @@
     "files": [
       "build/**/*",
       "public/electron.js",
-      "public/preload.js"
+      "public/preload.js",
+      "public/webcam-preview.html",
+      "node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "public/webcam-preview.html",
+        "to": "webcam-preview.html"
+      }
     ],
     "mac": {
-      "category": "public.app-category.video"
+      "category": "public.app-category.video",
+      "target": "dmg",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "entitlements": "entitlements.mac.plist",
+      "entitlementsInherit": "entitlements.mac.plist"
     },
     "win": {
       "target": "nsis"
     },
     "linux": {
       "target": "AppImage"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

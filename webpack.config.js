@@ -1,15 +1,18 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 
-module.exports = {
-  mode: 'development',
+module.exports = (env, argv) => {
+  const isProduction = argv.mode === 'production';
+  
+  return {
+  mode: argv.mode || 'development',
   entry: {
     main: './src/index.js'
   },
   output: {
     path: path.resolve(__dirname, 'build'),
     filename: 'bundle.js',
-    publicPath: '/'  // Changed from './' to '/' for dev server
+    publicPath: isProduction ? './' : '/'
   },
   stats: {
     children: true,
@@ -66,4 +69,5 @@ module.exports = {
   resolve: {
     extensions: ['.js', '.jsx']
   }
+  };
 };

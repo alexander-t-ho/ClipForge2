@@ -471,8 +471,15 @@ function App() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Delete' && selectedClip) {
-        deleteClip(selectedClip.id);
-        setSelectedClip(null);
+        // Only remove from timeline if the clip is on the timeline
+        if (selectedClip.onTimeline) {
+          removeClipFromTimeline(selectedClip.id);
+          setSelectedClip(null);
+        } else {
+          // If not on timeline, completely delete the clip
+          deleteClip(selectedClip.id);
+          setSelectedClip(null);
+        }
       } else if (e.key === 's' && selectedClip) {
         splitClip(selectedClip.id, currentTime);
       }
@@ -480,7 +487,7 @@ function App() {
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedClip, currentTime, deleteClip, splitClip]);
+  }, [selectedClip, currentTime, deleteClip, removeClipFromTimeline, splitClip]);
 
   // Find the current clip based on timeline position
   const getCurrentClip = useCallback(() => {
